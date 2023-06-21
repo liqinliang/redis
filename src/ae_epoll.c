@@ -40,18 +40,23 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
     aeApiState *state = zmalloc(sizeof(aeApiState));
 
     if (!state) return -1;
+    //分配epoll_event 数组空间
     state->events = zmalloc(sizeof(struct epoll_event)*eventLoop->setsize);
+    //没有分配成功需要释放掉
     if (!state->events) {
         zfree(state);
         return -1;
     }
+    //native method  epollo instance handler 1024 file descriptor at the same time, but total more
     state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
     if (state->epfd == -1) {
         zfree(state->events);
         zfree(state);
         return -1;
     }
+    //设置一个标志位 确保子进程不会调用 父进程打开的文件
     anetCloexec(state->epfd);
+    //不同的操作系统不同的实现。
     eventLoop->apidata = state;
     return 0;
 }

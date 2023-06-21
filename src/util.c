@@ -411,6 +411,7 @@ int string2ll(const char *s, size_t slen, long long *value) {
 
     /* First digit should be 1-9, otherwise the string should just be 0. */
     if (p[0] >= '1' && p[0] <= '9') {
+        //ASCII 码值
         v = p[0]-'0';
         p++; plen++;
     } else {
@@ -421,6 +422,7 @@ int string2ll(const char *s, size_t slen, long long *value) {
     while (plen < slen && p[0] >= '0' && p[0] <= '9') {
         if (v > (ULLONG_MAX / 10)) /* Overflow. */
             return 0;
+            //上面已经计算过了第一位。如果后面还有就要进位所以*10
         v *= 10;
 
         if (v > (ULLONG_MAX - (p[0]-'0'))) /* Overflow. */

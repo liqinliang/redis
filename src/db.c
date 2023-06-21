@@ -1611,6 +1611,7 @@ int getKeysUsingCommandTable(struct redisCommand *cmd,robj **argv, int argc, get
     }
 
     last = cmd->lastkey;
+    //计算最后一个key的位置
     if (last < 0) last = argc+last;
 
     int count = ((last - cmd->firstkey)+1);

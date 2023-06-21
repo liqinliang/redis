@@ -1183,8 +1183,9 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(el);
     UNUSED(mask);
     UNUSED(privdata);
-
+    // 一次接收最大的客户端链接数量。。。。。。
     while(max--) {
+        //client fd  接收链接以后文件描述符。
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
             if (errno != EWOULDBLOCK)
@@ -1194,6 +1195,8 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         }
         anetCloexec(cfd);
         serverLog(LL_VERBOSE,"Accepted %s:%d", cip, cport);
+
+        // 里层方法创建链接，
         acceptCommonHandler(connCreateAcceptedSocket(cfd),0,cip);
     }
 }
@@ -1920,13 +1923,14 @@ int processMultibulkBuffer(client *c) {
             return C_ERR;
         }
 
-        /* Buffer should also contain \n */
+        /* Buffer should also contain \n  要读的字节数量  要大于已经有的内容到指针位置这些字节是已经存在的未读的。-2是确保命令完整  新的一行到\r 算结束  --未读的必须够读，并且包含\r\n*/
         if (newline-(c->querybuf+c->qb_pos) > (ssize_t)(sdslen(c->querybuf)-c->qb_pos-2))
             return C_ERR;
 
         /* We know for sure there is a whole line since newline != NULL,
          * so go ahead and find out the multi bulk length. */
         serverAssertWithInfo(c,NULL,c->querybuf[c->qb_pos] == '*');
+        //+1 is *
         ok = string2ll(c->querybuf+1+c->qb_pos,newline-(c->querybuf+1+c->qb_pos),&ll);
         if (!ok || ll > 1024*1024) {
             addReplyError(c,"Protocol error: invalid multibulk length");
@@ -2227,27 +2231,34 @@ void readQueryFromClient(connection *conn) {
 
     /* Update total number of reads on server */
     atomicIncr(server.stat_total_reads_processed, 1);
-
+    //1024*16
     readlen = PROTO_IOBUF_LEN;
     /* If this is a multi bulk request, and we are processing a bulk reply
      * that is large enough, try to maximize the probability that the query
      * buffer contains exactly the SDS string representing the object, even
      * at the risk of requiring more read(2) calls. This way the function
      * processMultiBulkBuffer() can avoid copying buffers to create the
-     * Redis Object representing the argument. */
+     * Redis Object representing the argument.
+     *
+     * */
     if (c->reqtype == PROTO_REQ_MULTIBULK && c->multibulklen && c->bulklen != -1
+    //32*1024
         && c->bulklen >= PROTO_MBULK_BIG_ARG)
     {
+        //长度后面还有\r\n 两个字符  其他会包含在长度里面
         ssize_t remaining = (size_t)(c->bulklen+2)-sdslen(c->querybuf);
 
         /* Note that the 'remaining' variable may be zero in some edge case,
          * for example once we resume a blocked client after CLIENT PAUSE. */
         if (remaining > 0 && remaining < readlen) readlen = remaining;
     }
-
+    //已经使用过的空间
     qblen = sdslen(c->querybuf);
+    //峰值
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
+    //todo 大概意思是保证空间足够，后面详细查看
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+    //n bytes read to querybuf
     nread = connRead(c->conn, c->querybuf+qblen, readlen);
     if (nread == -1) {
         if (connGetState(conn) == CONN_STATE_CONNECTED) {
@@ -2271,8 +2282,11 @@ void readQueryFromClient(connection *conn) {
 
     sdsIncrLen(c->querybuf,nread);
     c->lastinteraction = server.unixtime;
+    // 如果是master需要增加复制偏移offset
     if (c->flags & CLIENT_MASTER) c->read_reploff += nread;
+    //统计读入
     atomicIncr(server.stat_net_input_bytes, nread);
+    //已经使用的内存 大于客户端最大buff 长度
     if (sdslen(c->querybuf) > server.client_max_querybuf_len) {
         sds ci = catClientInfoString(sdsempty(),c), bytes = sdsempty();
 

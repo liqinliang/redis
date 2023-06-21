@@ -81,6 +81,7 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     eventLoop->beforesleep = NULL;
     eventLoop->aftersleep = NULL;
     eventLoop->flags = 0;
+    //创建redis封装 IO多路复用模型 赋值给 apidata 调用epoll_create  native method
     if (aeApiCreate(eventLoop) == -1) goto err;
     /* Events with mask == AE_NONE are not set. So let's initialize the
      * vector with it. */
@@ -162,13 +163,14 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         return AE_ERR;
     }
     aeFileEvent *fe = &eventLoop->events[fd];
-
+    //epoll_ctl  native method
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
     fe->mask |= mask;
     if (mask & AE_READABLE) fe->rfileProc = proc;
     if (mask & AE_WRITABLE) fe->wfileProc = proc;
     fe->clientData = clientData;
+    //记录最大id
     if (fd > eventLoop->maxfd)
         eventLoop->maxfd = fd;
     return AE_OK;
@@ -402,7 +404,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
             int mask = eventLoop->fired[j].mask;
             int fd = eventLoop->fired[j].fd;
-            int fired = 0; /* Number of events fired for current fd. */
+            int fired = 0; /* NumbereventLoop of events fired for current fd. */
 
             /* Normally we execute the readable event first, and the writable
              * event later. This is useful as sometimes we may be able

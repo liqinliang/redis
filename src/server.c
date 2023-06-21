@@ -2647,8 +2647,11 @@ void initServerConfig(void) {
     int j;
 
     updateCachedTime(1);
+    //CONFIG_RUN_ID_SIZE=40
     getRandomHexChars(server.runid,CONFIG_RUN_ID_SIZE);
+    //last is \0
     server.runid[CONFIG_RUN_ID_SIZE] = '\0';
+    //server.replid
     changeReplicationId();
     clearReplicationId2();
     server.hz = CONFIG_DEFAULT_HZ; /* Initialize it ASAP, even if it may get
@@ -2737,11 +2740,11 @@ void initServerConfig(void) {
     for (j = 0; j < CLIENT_TYPE_OBUF_COUNT; j++)
         server.client_obuf_limits[j] = clientBufferLimitsDefaults[j];
 
-    /* Linux OOM Score config */
+    /* Linux OOM Score config  { 0, 200, 800 } */
     for (j = 0; j < CONFIG_OOM_COUNT; j++)
         server.oom_score_adj_values[j] = configOOMScoreAdjValuesDefaults[j];
 
-    /* Double constants initialization */
+    /* Double constants initialization 浮点数计算结果表示：  浮点数  正无穷  负无穷   非数字 */
     R_Zero = 0.0;
     R_PosInf = 1.0/R_Zero;
     R_NegInf = -1.0/R_Zero;
@@ -3072,7 +3075,7 @@ int listenToPort(int port, socketFds *sfd) {
             /* Bind IPv6 address. */
             sfd->fd[sfd->count] = anetTcp6Server(server.neterr,port,addr,server.tcp_backlog);
         } else {
-            /* Bind IPv4 address. */
+            /* Bind IPv4 address.  return server socketFd */
             sfd->fd[sfd->count] = anetTcpServer(server.neterr,port,addr,server.tcp_backlog);
         }
         if (sfd->fd[sfd->count] == ANET_ERR) {
@@ -3207,6 +3210,7 @@ void initServer(void) {
     adjustOpenFilesLimit();
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
+    //赋值eventloop
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -3218,6 +3222,7 @@ void initServer(void) {
 
     /* Open the TCP listening socket for the user commands. */
     if (server.port != 0 &&
+    //监听端口
         listenToPort(server.port,&server.ipfd) == C_ERR) {
         /* Note: the following log text is matched by the test suite. */
         serverLog(LL_WARNING, "Failed listening on port %u (TCP), aborting.", server.port);
@@ -4090,6 +4095,7 @@ int processCommand(client *c) {
      * However we don't perform the redirection if:
      * 1) The sender of this command is our master.
      * 2) The command has no key arguments. */
+    // 执行重定向是不能在slave上写的。 不是master 不能写要执行， 两个！ 括号里面都是能写的情况。 排除能写就是不能写。
     if (server.cluster_enabled &&
         !(c->flags & CLIENT_MASTER) &&
         !(c->flags & CLIENT_LUA &&
@@ -5981,6 +5987,7 @@ int checkForSentinelMode(int argc, char **argv) {
 
     if (strstr(argv[0],"redis-sentinel") != NULL) return 1;
     for (j = 1; j < argc; j++)
+        // eq  return 0
         if (!strcmp(argv[j],"--sentinel")) return 1;
     return 0;
 }
@@ -6282,10 +6289,11 @@ int main(int argc, char **argv) {
      * race condition with threads that could be creating files or directories.
      */
     umask(server.umask = umask(0777));
-
+    // 无符号八位char类型 数组
     uint8_t hashseed[16];
     getRandomBytes(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed(hashseed);
+    // determine is sentinel_mode
     server.sentinel_mode = checkForSentinelMode(argc,argv);
     initServerConfig();
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
