@@ -106,6 +106,7 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
 robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
     robj *val;
 
+    //过期
     if (expireIfNeeded(db,key) == 1) {
         /* If we are in the context of a master, expireIfNeeded() returns 1
          * when the key is no longer valid, so we can return NULL ASAP. */
@@ -176,7 +177,9 @@ void SentReplyOnKeyMiss(client *c, robj *reply){
 }
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
     robj *o = lookupKeyRead(c->db, key);
+    //不存在的返回
     if (!o) SentReplyOnKeyMiss(c, reply);
+    //存在
     return o;
 }
 
@@ -1613,7 +1616,7 @@ int getKeysUsingCommandTable(struct redisCommand *cmd,robj **argv, int argc, get
     last = cmd->lastkey;
     //计算最后一个key的位置
     if (last < 0) last = argc+last;
-
+    //count代表键值对的数量。
     int count = ((last - cmd->firstkey)+1);
     keys = getKeysPrepareResult(result, count);
 
@@ -1632,6 +1635,7 @@ int getKeysUsingCommandTable(struct redisCommand *cmd,robj **argv, int argc, get
                 serverPanic("Redis built-in command declared keys positions not matching the arity requirements.");
             }
         }
+        //计算key位置
         keys[i++] = j;
     }
     result->numkeys = i;

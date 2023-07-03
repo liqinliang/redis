@@ -100,6 +100,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
         }
     }
 
+    //nx 是不存在的操作。xx是存在的操作   这里是相反的判断，不符合nx  xx的情况要返回。
     if ((flags & OBJ_SET_NX && lookupKeyWrite(c->db,key) != NULL) ||
         (flags & OBJ_SET_XX && lookupKeyWrite(c->db,key) == NULL))
     {
@@ -107,6 +108,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
         return;
     }
 
+    //如果setget操作 需要获取操作之前的数据
     if (flags & OBJ_SET_GET) {
         if (getGenericCommand(c) == C_ERR) return;
     }
@@ -175,12 +177,13 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
  * EX/EXAT/PX/PXAT arguments. Unit is updated to millisecond if PX/PXAT is set.
  */
 int parseExtendedStringArgumentsOrReply(client *c, int *flags, int *unit, robj **expire, int command_type) {
-
+    //set 从第四个参数开始 set key value nx[xx[
     int j = command_type == COMMAND_GET ? 2 : 3;
     for (; j < c->argc; j++) {
         char *opt = c->argv[j]->ptr;
+        //是否有下一个
         robj *next = (j == c->argc-1) ? NULL : c->argv[j+1];
-
+        //处理 set key value nx
         if ((opt[0] == 'n' || opt[0] == 'N') &&
             (opt[1] == 'x' || opt[1] == 'X') && opt[2] == '\0' &&
             !(*flags & OBJ_SET_XX) && !(*flags & OBJ_SET_GET) && (command_type == COMMAND_SET))
@@ -191,6 +194,7 @@ int parseExtendedStringArgumentsOrReply(client *c, int *flags, int *unit, robj *
                    !(*flags & OBJ_SET_NX) && (command_type == COMMAND_SET))
         {
             *flags |= OBJ_SET_XX;
+            //处理 set key value get  6.2.0新版本可以这样写。
         } else if ((opt[0] == 'g' || opt[0] == 'G') &&
                    (opt[1] == 'e' || opt[1] == 'E') &&
                    (opt[2] == 't' || opt[2] == 'T') && opt[3] == '\0' &&
@@ -265,10 +269,11 @@ void setCommand(client *c) {
     int unit = UNIT_SECONDS;
     int flags = OBJ_NO_FLAGS;
 
+    //解析参数标记flags
     if (parseExtendedStringArgumentsOrReply(c,&flags,&unit,&expire,COMMAND_SET) != C_OK) {
         return;
     }
-
+    // set k v
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setGenericCommand(c,flags,c->argv[1],c->argv[2],expire,unit,NULL,NULL);
 }
@@ -293,7 +298,7 @@ int getGenericCommand(client *c) {
 
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.null[c->resp])) == NULL)
         return C_OK;
-
+//检查返回 value 是不是string类型。不是的话报错。
     if (checkType(c,o,OBJ_STRING)) {
         return C_ERR;
     }

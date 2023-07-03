@@ -65,7 +65,7 @@ void queueMultiCommand(client *c) {
      * aborted. */
     if (c->flags & CLIENT_DIRTY_EXEC)
         return;
-
+    //在原来基础上重新多分配一个空间
     c->mstate.commands = zrealloc(c->mstate.commands,
             sizeof(multiCmd)*(c->mstate.count+1));
     mc = c->mstate.commands+c->mstate.count;

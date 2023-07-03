@@ -4108,11 +4108,13 @@ int processCommand(client *c) {
         clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
                                         &hashslot,&error_code);
         if (n == NULL || n != server.cluster->myself) {
+            //事务操作，直接不执行
             if (c->cmd->proc == execCommand) {
                 discardTransaction(c);
             } else {
                 flagTransaction(c);
             }
+            //重定向操作。
             clusterRedirectClient(c,n,hashslot,error_code);
             c->cmd->rejected_calls++;
             return C_OK;

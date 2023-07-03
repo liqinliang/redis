@@ -759,10 +759,11 @@ unsigned int keyHashSlot(char *key, int keylen) {
     if (s == keylen) return crc16(key,keylen) & 0x3FFF;
 
     /* '{' found? Check if we have the corresponding '}'. */
+    //代码执行到这里说明有{ 发现上面break 从{ 后面第一个字符开始 一直到} 结束
     for (e = s+1; e < keylen; e++)
         if (key[e] == '}') break;
 
-    /* No '}' or nothing between {} ? Hash the whole key. */
+    /* No '}' or nothing between {} ? Hash the whole key.  0011111111111111 14 位*/
     if (e == keylen || e == s+1) return crc16(key,keylen) & 0x3FFF;
 
     /* If we are here there is both a { and a } on its right. Hash
@@ -5796,6 +5797,7 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
 
         for (j = 0; j < numkeys; j++) {
             robj *thiskey = margv[keyindex[j]];
+            //根据key 计算hashSlot  如果{} 内有值 用{}内的作为key
             int thisslot = keyHashSlot((char*)thiskey->ptr,
                                        sdslen(thiskey->ptr));
 
@@ -5833,6 +5835,7 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
                 /* If it is not the first key, make sure it is exactly
                  * the same key as the first we saw. */
                 if (!equalStringObjects(firstkey,thiskey)) {
+                    //同时执行的多个key不在一个slots 里面 跨了slots, 不能执行这样的操作。
                     if (slot != thisslot) {
                         /* Error: multiple keys from different slots. */
                         getKeysFreeResult(&result);
