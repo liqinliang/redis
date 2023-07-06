@@ -4486,6 +4486,7 @@ void pingCommand(client *c) {
     }
 
     if (c->flags & CLIENT_PUBSUB && c->resp == 2) {
+        //   *2\r\n
         addReply(c,shared.mbulkhdr[2]);
         addReplyBulkCBuffer(c,"pong",4);
         if (c->argc == 1)

@@ -427,6 +427,7 @@ _quicklistNodeSizeMeetsOptimizationRequirement(const size_t sz,
 
 REDIS_STATIC int _quicklistNodeAllowInsert(const quicklistNode *node,
                                            const int fill, const size_t sz) {
+    //不存在概率很小，编译器做优化
     if (unlikely(!node))
         return 0;
 
@@ -492,6 +493,7 @@ REDIS_STATIC int _quicklistNodeAllowMerge(const quicklistNode *a,
 int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_head = quicklist->head;
     assert(sz < UINT32_MAX); /* TODO: add support for quicklist nodes that are sds encoded (not zipped) */
+    //true 的概率很大，likely  allowInsert
     if (likely(
             _quicklistNodeAllowInsert(quicklist->head, quicklist->fill, sz))) {
         quicklist->head->zl =

@@ -107,10 +107,11 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     /* Empty strings are usually created in order to append. Use type 8
      * since type 5 is not good at this. */
     if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
+    //结构体大小     struct sdshdr8 …………
     int hdrlen = sdsHdrSize(type);
     unsigned char *fp; /* flags pointer. */
     size_t usable;
-
+    //initlen 字符串大小，hdrlen struct size  +1 is \0
     assert(initlen + hdrlen + 1 > initlen); /* Catch size_t overflow */
     sh = trymalloc?
         s_trymalloc_usable(hdrlen+initlen+1, &usable) :
@@ -120,8 +121,11 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
         init = NULL;
     else if (!init)
         memset(sh, 0, hdrlen+initlen+1);
+    //struct point + struct size   char array start
     s = (char*)sh+hdrlen;
+    // pre is flag
     fp = ((unsigned char*)s)-1;
+    //only char len  not contains \0  and struct size
     usable = usable-hdrlen-1;
     if (usable > sdsTypeMaxSize(type))
         usable = sdsTypeMaxSize(type);
@@ -131,6 +135,8 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
             break;
         }
         case SDS_TYPE_8: {
+            // SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
+            // link pos to *sh(point)
             SDS_HDR_VAR(8,s);
             sh->len = initlen;
             sh->alloc = usable;

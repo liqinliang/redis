@@ -236,6 +236,7 @@ void pushGenericCommand(client *c, int where, int xx) {
     robj *lobj = lookupKeyWrite(c->db, c->argv[1]);
     if (checkType(c,lobj,OBJ_LIST)) return;
     if (!lobj) {
+        //如果lobj 不存在 又有存在更新的语义 返回
         if (xx) {
             addReply(c, shared.czero);
             return;
@@ -932,7 +933,7 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
     return C_OK;
 }
 
-/* Blocking RPOP/LPOP */
+/* Blocking RPOP/LPOP 返回所有key的 第一个非空列表 */
 void blockingPopGenericCommand(client *c, int where) {
     robj *o;
     mstime_t timeout;
@@ -962,6 +963,7 @@ void blockingPopGenericCommand(client *c, int where) {
                     rewriteClientCommandVector(c,2,
                         (where == LIST_HEAD) ? shared.lpop : shared.rpop,
                         c->argv[j]);
+                    //返回第一个非空列表的 第一个或者最后一个。根据where定
                     return;
                 }
             }
@@ -977,6 +979,7 @@ void blockingPopGenericCommand(client *c, int where) {
 
     /* If the keys do not exist we must block */
     struct listPos pos = {where};
+    //+1 第二个参数是key的开始 -2 倒数第二个是pop 数量  最后一个是timeout
     blockForKeys(c,BLOCKED_LIST,c->argv + 1,c->argc - 2,timeout,NULL,&pos,NULL);
 }
 

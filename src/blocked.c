@@ -664,6 +664,7 @@ void blockForKeys(client *c, int btype, robj **keys, int numkeys, mstime_t timeo
             bki->stream_id = ids[j];
 
         /* If the key already exists in the dictionary ignore it. */
+        //添加一个 block keys
         if (dictAdd(c->bpop.keys,keys[j],bki) != DICT_OK) {
             zfree(bki);
             continue;

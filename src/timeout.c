@@ -97,6 +97,7 @@ void encodeTimeoutKey(unsigned char *buf, uint64_t timeout, client *c) {
     timeout = htonu64(timeout);
     memcpy(buf,&timeout,sizeof(timeout));
     memcpy(buf+8,&c,sizeof(c));
+    //64位操作系统一个指针占用8字节
     if (sizeof(c) == 4) memset(buf+12,0,4); /* Zero padding for 32bit target. */
 }
 
@@ -114,6 +115,7 @@ void decodeTimeoutKey(unsigned char *buf, uint64_t *toptr, client **cptr) {
 void addClientToTimeoutTable(client *c) {
     if (c->bpop.timeout == 0) return;
     uint64_t timeout = c->bpop.timeout;
+    //字符数组 8个字节存放时间 8个字节存放client的指针。
     unsigned char buf[CLIENT_ST_KEYLEN];
     encodeTimeoutKey(buf,timeout,c);
     if (raxTryInsert(server.clients_timeout_table,buf,sizeof(buf),NULL,NULL))
