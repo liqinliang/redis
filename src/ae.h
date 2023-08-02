@@ -97,15 +97,15 @@ typedef struct aeFiredEvent {
 
 /* State of an event based program */
 typedef struct aeEventLoop {
-    int maxfd;   /* highest file descriptor currently registered */
-    int setsize; /* max number of file descriptors tracked */
-    long long timeEventNextId;
-    aeFileEvent *events; /* Registered events */
-    aeFiredEvent *fired; /* Fired events */
-    aeTimeEvent *timeEventHead;
-    int stop;
-    void *apidata; /* This is used for polling API specific data */
-    aeBeforeSleepProc *beforesleep;
+    int maxfd;   /* highest file descriptor currently registered  最大文件描述符*/
+    int setsize; /* max number of file descriptors tracked 数量 */
+    long long timeEventNextId; /* 时间事件下一个ID */
+    aeFileEvent *events; /* Registered events 注册的是文件事件 */
+    aeFiredEvent *fired; /* Fired events 已经触发的是事件 */
+    aeTimeEvent *timeEventHead; /* 时间事件的头指针 */
+    int stop;/* 是否停止*/
+    void *apidata; /* This is used for polling API specific data  指向aeApiState封装了epoll_event */
+    aeBeforeSleepProc *beforesleep; /* 两个前后调用方法*/
     aeBeforeSleepProc *aftersleep;
     int flags;
 } aeEventLoop;
@@ -123,7 +123,7 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeEventFinalizerProc *finalizerProc);
 int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id);
 int aeProcessEvents(aeEventLoop *eventLoop, int flags);
-int aeWait(int fd, int mask, long long milliseconds);
+int aeWait(int fd, int mask, lobeforesleepng long milliseconds);
 void aeMain(aeEventLoop *eventLoop);
 char *aeGetApiName(void);
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep);

@@ -89,7 +89,8 @@ void moduleCallClusterReceivers(const char *sender_id, uint64_t module_id, uint8
  * If the file does not exist or is zero-length (this may happen because
  * when we lock the nodes.conf file, we create a zero-length one for the
  * sake of locking if it does not already exist), C_ERR is returned.
- * If the configuration was loaded from the file, C_OK is returned. */
+ * If the configuration was loaded from the file, C_OK is returned.
+ * <node_id> <ip_address>:<port> <flags> <master_node_id> <ping_sent> <pong_received> <config_epoch> <link_state>*/
 int clusterLoadConfig(char *filename) {
     FILE *fp = fopen(filename,"r");
     struct stat sb;
@@ -249,6 +250,7 @@ int clusterLoadConfig(char *filename) {
             int start, stop;
 
             if (argv[j][0] == '[') {
+                //
                 /* Here we handle migrating / importing slots */
                 int slot;
                 char direction;
@@ -408,7 +410,7 @@ int clusterLockConfig(char *filename) {
             filename, strerror(errno));
         return C_ERR;
     }
-
+    //独占写锁，并且不阻塞
     if (flock(fd,LOCK_EX|LOCK_NB) == -1) {
         if (errno == EWOULDBLOCK) {
             serverLog(LL_WARNING,
@@ -500,6 +502,7 @@ void clusterInit(void) {
     }
     server.cluster->stats_pfail_nodes = 0;
     memset(server.cluster->slots,0, sizeof(server.cluster->slots));
+    //slots 迁移数组都设置0
     clusterCloseAllSlots();
 
     /* Lock the cluster config file to make sure every node uses
@@ -730,7 +733,7 @@ void clusterAcceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
 }
 
 /* Return the approximated number of sockets we are using in order to
- * take the cluster bus connections. */
+ * take the cluster bus connections. 这里指的是集群之间通信的文件描述符， 一个接收通道，一个发送通道，一个节点两个 */
 unsigned long getClusterConnectionsCount(void) {
     /* We decrement the number of nodes by one, since there is the
      * "myself" node too in the list. Each node uses two file descriptors,

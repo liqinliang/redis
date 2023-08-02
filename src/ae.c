@@ -220,6 +220,7 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
     te->finalizerProc = finalizerProc;
     te->clientData = clientData;
     te->prev = NULL;
+    //下一个是head insert head top slef change to head
     te->next = eventLoop->timeEventHead;
     te->refcount = 0;
     if (te->next)
@@ -255,6 +256,7 @@ static int64_t usUntilEarliestTimer(aeEventLoop *eventLoop) {
     if (te == NULL) return -1;
 
     aeTimeEvent *earliest = NULL;
+    //遍历最早TimeEvent  computer
     while (te) {
         if (!earliest || te->when < earliest->when)
             earliest = te;
@@ -277,7 +279,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
     while(te) {
         long long id;
 
-        /* Remove events scheduled for deletion. */
+        /* Remove events scheduled for deletion.  删除的te */
         if (te->id == AE_DELETED_EVENT_ID) {
             aeTimeEvent *next = te->next;
             /* If a reference exists for this timer event,
@@ -365,6 +367,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
         int64_t usUntilTimer = -1;
 
         if (flags & AE_TIME_EVENTS && !(flags & AE_DONT_WAIT))
+            //计算最早时间事件 和目前事件差值，还有多久到事件
             usUntilTimer = usUntilEarliestTimer(eventLoop);
 
         if (usUntilTimer >= 0) {
@@ -379,11 +382,11 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
                 tv.tv_sec = tv.tv_usec = 0;
                 tvp = &tv;
             } else {
-                /* Otherwise we can block */
+                /* Otherwise we can block   可以阻塞，是因为没有AE_DONT_WAIT 标识*/
                 tvp = NULL; /* wait forever */
             }
         }
-
+        // 这里为什么重新覆盖， 这里 code may be
         if (eventLoop->flags & AE_DONT_WAIT) {
             tv.tv_sec = tv.tv_usec = 0;
             tvp = &tv;
@@ -441,6 +444,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 
             /* If we have to invert the call, fire the readable event now
              * after the writable one. */
+            //如果设置了翻转屏障，则后执行，此时确保安全，再次校验没有处理过可以，读写不相等也可以  因为这里是处理读的，上面writer
             if (invert) {
                 fe = &eventLoop->events[fd]; /* Refresh in case of resize. */
                 if ((fe->mask & mask & AE_READABLE) &&

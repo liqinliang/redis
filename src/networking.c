@@ -276,6 +276,7 @@ int prepareClientToWrite(client *c) {
      * If CLIENT_PENDING_READ is set, we're in an IO thread and should
      * not install a write handler. Instead, it will be done by
      * handleClientsWithPendingReadsUsingThreads() upon return.
+     * r如果已经有了pending的回复，或者设置了client_pending_read 在IO线程。 标识 不安装写的处理器。否则进行写处理器安装。
      */
     if (!clientHasPendingReplies(c) && !(c->flags & CLIENT_PENDING_READ))
             clientInstallWriteHandler(c);
@@ -1110,6 +1111,7 @@ static void acceptCommonHandler(connection *conn, int flags, char *ip) {
     char conninfo[100];
     UNUSED(ip);
 
+    //链接状态校验
     if (connGetState(conn) != CONN_STATE_ACCEPTING) {
         serverLog(LL_VERBOSE,
             "Accepted client connection in error state: %s (conn: %s)",
@@ -1176,7 +1178,7 @@ static void acceptCommonHandler(connection *conn, int flags, char *ip) {
         return;
     }
 }
-
+//privdata 是 fe里面的clientdata  流程创建时候是null
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
     char cip[NET_IP_STR_LEN];
@@ -1193,6 +1195,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
                     "Accepting client connection: %s", server.neterr);
             return;
         }
+        //标记可以关闭fd 避免泄露
         anetCloexec(cfd);
         serverLog(LL_VERBOSE,"Accepted %s:%d", cip, cport);
 
@@ -1811,6 +1814,7 @@ int processInlineBuffer(client *c) {
 
     /* Split the input buffer up to the \r\n */
     querylen = newline-(c->querybuf+c->qb_pos);
+    //读取一行数据
     aux = sdsnewlen(c->querybuf+c->qb_pos,querylen);
     argv = sdssplitargs(aux,&argc);
     sdsfree(aux);
@@ -1941,11 +1945,11 @@ int processMultibulkBuffer(client *c) {
             setProtocolError("unauth mbulk count", c);
             return C_ERR;
         }
-
+        //+ \r\n
         c->qb_pos = (newline-c->querybuf)+2;
 
         if (ll <= 0) return C_OK;
-
+        //标注有多少个参数
         c->multibulklen = ll;
 
         /* Setup argv array on client structure */
@@ -1972,7 +1976,7 @@ int processMultibulkBuffer(client *c) {
             /* Buffer should also contain \n */
             if (newline-(c->querybuf+c->qb_pos) > (ssize_t)(sdslen(c->querybuf)-c->qb_pos-2))
                 break;
-
+            //后面得到是 $10  10 代表参数长度
             if (c->querybuf[c->qb_pos] != '$') {
                 addReplyErrorFormat(c,
                     "Protocol error: expected '$', got '%c'",
@@ -1980,7 +1984,7 @@ int processMultibulkBuffer(client *c) {
                 setProtocolError("expected $ but got something else",c);
                 return C_ERR;
             }
-
+            //+1 跳过$ 符号
             ok = string2ll(c->querybuf+c->qb_pos+1,newline-(c->querybuf+c->qb_pos+1),&ll);
             if (!ok || ll < 0 ||
                 (!(c->flags & CLIENT_MASTER) && ll > server.proto_max_bulk_len)) {
@@ -1992,18 +1996,20 @@ int processMultibulkBuffer(client *c) {
                 setProtocolError("unauth bulk length", c);
                 return C_ERR;
             }
-
+            //读取到 \r\n
             c->qb_pos = newline-c->querybuf+2;
+            //1024*32
             if (ll >= PROTO_MBULK_BIG_ARG) {
                 /* If we are going to read a large object from network
                  * try to make it likely that it will start at c->querybuf
                  * boundary so that we can optimize object creation
                  * avoiding a large copy of data.
-                 *
+                 * 如果
                  * But only when the data we have not parsed is less than
                  * or equal to ll+2. If the data length is greater than
                  * ll+2, trimming querybuf is just a waste of time, because
                  * at this time the querybuf contains not only our bulk. */
+
                 if (sdslen(c->querybuf)-c->qb_pos <= (size_t)ll+2) {
                     sdsrange(c->querybuf,c->qb_pos,-1);
                     c->qb_pos = 0;
@@ -2141,6 +2147,7 @@ int processPendingCommandsAndResetClient(client *c) {
  * pending query buffer, already representing a full command, to process. */
 void processInputBuffer(client *c) {
     /* Keep processing while there is something in the input buffer */
+    // 位置在已经使用的内存后面，有值要处理
     while(c->qb_pos < sdslen(c->querybuf)) {
         /* Immediately abort if the client is in the middle of something. */
         if (c->flags & CLIENT_BLOCKED) break;
@@ -2215,6 +2222,7 @@ void processInputBuffer(client *c) {
 
     /* Trim to pos */
     if (c->qb_pos) {
+        // 处理过的消息截取掉。位置从头开始
         sdsrange(c->querybuf,c->qb_pos,-1);
         c->qb_pos = 0;
     }
@@ -3549,7 +3557,7 @@ void *IOThreadMain(void *myid) {
     makeThreadKillable();
 
     while(1) {
-        /* Wait for start */
+        /* Wait for start  一旦有数据就跳出100万循环，主要是等待一下 马上有数据。 */
         for (int j = 0; j < 1000000; j++) {
             if (getIOPendingCount(id) != 0) break;
         }
@@ -3591,6 +3599,7 @@ void initThreadedIO(void) {
      * we'll handle I/O directly from the main thread. */
     if (server.io_threads_num == 1) return;
 
+    //不能超过128个io线程。。。。。
     if (server.io_threads_num > IO_THREADS_MAX_NUM) {
         serverLog(LL_WARNING,"Fatal: too many I/O threads configured. "
                              "The maximum number is %d.", IO_THREADS_MAX_NUM);
@@ -3599,7 +3608,7 @@ void initThreadedIO(void) {
 
     /* Spawn and initialize the I/O threads. */
     for (int i = 0; i < server.io_threads_num; i++) {
-        /* Things we do for all the threads including the main thread. */
+        /* Things we do for all the threads including the main thread. 包含主线程 */
         io_threads_list[i] = listCreate();
         if (i == 0) continue; /* Thread 0 is the main thread. */
 
@@ -3608,6 +3617,7 @@ void initThreadedIO(void) {
         pthread_mutex_init(&io_threads_mutex[i],NULL);
         setIOPendingCount(i, 0);
         pthread_mutex_lock(&io_threads_mutex[i]); /* Thread will be stopped. */
+        // 会给tid赋值
         if (pthread_create(&tid,NULL,IOThreadMain,(void*)(long)i) != 0) {
             serverLog(LL_WARNING,"Fatal: Can't initialize IO thread.");
             exit(1);
@@ -3797,20 +3807,22 @@ int handleClientsWithPendingReadsUsingThreads(void) {
     /* Give the start condition to the waiting threads, by setting the
      * start condition atomic var. */
     io_threads_op = IO_THREADS_OP_READ;
+    //设置io线程 每个线程处理客户端的数量， 第0个是主线程。
     for (int j = 1; j < server.io_threads_num; j++) {
         int count = listLength(io_threads_list[j]);
         setIOPendingCount(j, count);
     }
 
-    /* Also use the main thread to process a slice of clients. */
+    /* Also use the main thread to process a slice of clients. 主线程 */
     listRewind(io_threads_list[0],&li);
     while((ln = listNext(&li))) {
         client *c = listNodeValue(ln);
+        //主线程处理读请求。
         readQueryFromClient(c->conn);
     }
     listEmpty(io_threads_list[0]);
 
-    /* Wait for all the other threads to end their work. */
+    /* Wait for all the other threads to end their work. 等带其他线程都处理完成，pending==0 */
     while(1) {
         unsigned long pending = 0;
         for (int j = 1; j < server.io_threads_num; j++)

@@ -979,7 +979,7 @@ void blockingPopGenericCommand(client *c, int where) {
 
     /* If the keys do not exist we must block */
     struct listPos pos = {where};
-    //+1 第二个参数是key的开始 -2 倒数第二个是pop 数量  最后一个是timeout
+    //+1 第二个参数是key的开始 -2 倒数第二个是pop key (not emelent) 数量  最后一个是timeout
     blockForKeys(c,BLOCKED_LIST,c->argv + 1,c->argc - 2,timeout,NULL,&pos,NULL);
 }
 

@@ -1918,6 +1918,7 @@ static inline void updateCachedTimeWithUs(int update_daylight_info, const long l
         struct tm tm;
         time_t ut = server.unixtime;
         localtime_r(&ut,&tm);
+        //夏令时是否有效
         server.daylight_active = tm.tm_isdst;
     }
 }
@@ -2343,7 +2344,7 @@ extern int ProcessingEventsWhileBlocked;
 /* This function gets called every time Redis is entering the
  * main loop of the event driven library, that is, before to sleep
  * for ready file descriptors.
- *
+ * 两个地方调用
  * Note: This function is (currently) called from two functions:
  * 1. aeMain - The main server loop
  * 2. processEventsWhileBlocked - Process clients during RDB/AOF load
@@ -2353,11 +2354,15 @@ extern int ProcessingEventsWhileBlocked;
  * keys), but we do need to perform some actions.
  *
  * The most important is freeClientsInAsyncFreeQueue but we also
- * call some other low-risk functions. */
+ * call some other low-risk functions.
+ *
+ *
+ * */
 void beforeSleep(struct aeEventLoop *eventLoop) {
     UNUSED(eventLoop);
 
     size_t zmalloc_used = zmalloc_used_memory();
+    //更新最大使用内存记录
     if (zmalloc_used > server.stat_peak_memory)
         server.stat_peak_memory = zmalloc_used;
 
@@ -2687,12 +2692,15 @@ void initServerConfig(void) {
     server.aof_selected_db = -1; /* Make sure the first time will not match */
     server.aof_flush_postponed_start = 0;
     server.pidfile = NULL;
+    //defragmentation 碎片整理
     server.active_defrag_running = 0;
     server.notify_keyspace_events = 0;
     server.blocked_clients = 0;
+    //一共7中阻塞类型，每种类型对应一些对应客户端
     memset(server.blocked_clients_by_type,0,
            sizeof(server.blocked_clients_by_type));
     server.shutdown_asap = 0;
+    //nodes.conf
     server.cluster_configfile = zstrdup(CONFIG_DEFAULT_CLUSTER_CONFIG_FILE);
     server.cluster_module_flags = CLUSTER_MODULE_FLAG_NONE;
     server.migrate_cached_sockets = dictCreate(&migrateCacheDictType,NULL);
@@ -2737,6 +2745,9 @@ void initServerConfig(void) {
     server.failover_state = NO_FAILOVER;
 
     /* Client output buffer limits */
+   ///{0, 0, 0}, /* normal */
+    //{1024*1024*256, 1024*1024*64, 60}, /* slave */
+    //{1024*1024*32, 1024*1024*8, 60}  /* pubsub */
     for (j = 0; j < CLIENT_TYPE_OBUF_COUNT; j++)
         server.client_obuf_limits[j] = clientBufferLimitsDefaults[j];
 
@@ -2755,7 +2766,9 @@ void initServerConfig(void) {
      * redis.conf using the rename-command directive. */
     server.commands = dictCreate(&commandTableDictType,NULL);
     server.orig_commands = dictCreate(&commandTableDictType,NULL);
+   //填充命令列表。。。 解析硬编码的命令列表 给server.commands 赋值
     populateCommandTable();
+    //快速指针，不是放在字典里面的。直接在server里面。
     server.delCommand = lookupCommandByCString("del");
     server.multiCommand = lookupCommandByCString("multi");
     server.lpushCommand = lookupCommandByCString("lpush");
@@ -2784,7 +2797,7 @@ void initServerConfig(void) {
     /* Client Pause related */
     server.client_pause_type = CLIENT_PAUSE_OFF;
     server.client_pause_end_time = 0;   
-
+    //初始化配置信息。硬编码里面的。
     initConfigValues();
 }
 
@@ -2920,7 +2933,7 @@ int setOOMScoreAdj(int process_class) {
 void adjustOpenFilesLimit(void) {
     rlim_t maxfiles = server.maxclients+CONFIG_MIN_RESERVED_FDS;
     struct rlimit limit;
-
+    //  获取文件描述符的 软硬限制 存在指针 limit里面
     if (getrlimit(RLIMIT_NOFILE,&limit) == -1) {
         serverLog(LL_WARNING,"Unable to obtain the current NOFILE limit (%s), assuming 1024 and setting the max clients configuration accordingly.",
             strerror(errno));
@@ -2937,6 +2950,7 @@ void adjustOpenFilesLimit(void) {
             /* Try to set the file limit to match 'maxfiles' or at least
              * to the higher value supported less than maxfiles. */
             bestlimit = maxfiles;
+            //试图设置一个最好的限制，如果设置不成功一次递减一个值（16） 进行设置。
             while(bestlimit > oldlimit) {
                 rlim_t decr_step = 16;
 
@@ -2952,9 +2966,11 @@ void adjustOpenFilesLimit(void) {
             }
 
             /* Assume that the limit we get initially is still valid if
-             * our last try was even lower. */
+             * our last try was even lower.
+             * 如果比原来的还少，就不设置了。还用原来的。
+             * */
             if (bestlimit < oldlimit) bestlimit = oldlimit;
-
+            //如果 最好的值，最终也没有达到预期的最大值，客户端数量+预留的  进行调整最大客户端数量， 如果预留的都不够进行报错。
             if (bestlimit < maxfiles) {
                 unsigned int old_maxclients = server.maxclients;
                 server.maxclients = bestlimit-CONFIG_MIN_RESERVED_FDS;
@@ -6357,6 +6373,7 @@ int main(int argc, char **argv) {
             server.exec_argv[1] = zstrdup(server.configfile);
             j = 2; // Skip this arg when parsing options
         }
+        //后面还有参数
         while(j < argc) {
             /* Either first or last argument - Should we read config from stdin? */
             if (argv[j][0] == '-' && argv[j][1] == '\0' && (j == 1 || j == argc-1)) {
@@ -6369,6 +6386,7 @@ int main(int argc, char **argv) {
             else if (argv[j][0] == '-' && argv[j][1] == '-') {
                 /* Option name */
                 if (sdslen(options)) options = sdscat(options,"\n");
+               //skip --  argv[j]+2
                 options = sdscat(options,argv[j]+2);
                 options = sdscat(options," ");
             } else {
@@ -6384,8 +6402,10 @@ int main(int argc, char **argv) {
         sdsfree(options);
     }
     if (server.sentinel_mode) sentinelCheckConfigFile();
+    // 是否监督模式
     server.supervised = redisIsSupervised(server.supervised_mode);
     int background = server.daemonize && !server.supervised;
+    //后台运行，fork一个线程。
     if (background) daemonize();
 
     serverLog(LL_WARNING, "oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo");
@@ -6408,6 +6428,7 @@ int main(int argc, char **argv) {
     if (background || server.pidfile) createPidFile();
     if (server.set_proc_title) redisSetProcTitle(NULL);
     redisAsciiArt();
+    //检查配置的大小和Linux文件允许的大小是否合理
     checkTcpBacklogSettings();
 
     if (!server.sentinel_mode) {

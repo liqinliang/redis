@@ -55,7 +55,7 @@ void freeClientMultiState(client *c) {
 }
 
 /* Add a new command into the MULTI commands queue */
-void queueMultiCommand(client *c) {
+void  queueMultiCommand(client *c) {
     multiCmd *mc;
     int j;
 
@@ -68,6 +68,7 @@ void queueMultiCommand(client *c) {
     //在原来基础上重新多分配一个空间
     c->mstate.commands = zrealloc(c->mstate.commands,
             sizeof(multiCmd)*(c->mstate.count+1));
+    //新的mc 指针赋值
     mc = c->mstate.commands+c->mstate.count;
     mc->cmd = c->cmd;
     mc->argc = c->argc;
