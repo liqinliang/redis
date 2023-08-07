@@ -250,7 +250,7 @@ static int connSocketSetReadHandler(connection *conn, ConnectionCallbackFunc fun
 static const char *connSocketGetLastError(connection *conn) {
     return strerror(conn->last_errno);
 }
-// 事件处理函数 ae 函数处理，在调用conn 的readQueryFromClient
+// 事件处理函数 ae 函数处理，在调用conn 的readQueryFromClient  还有写事件 sendReplyToClient
 static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientData, int mask)
 {
     UNUSED(el);

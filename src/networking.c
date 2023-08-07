@@ -1577,6 +1577,7 @@ int writeToClient(client *c, int handler_installed) {
 
     while(clientHasPendingReplies(c)) {
         if (c->bufpos > 0) {
+            //调用conn->type的写函数 再次调用底层写函数 通过fd直接写进去
             nwritten = connWrite(c->conn,c->buf+c->sentlen,c->bufpos-c->sentlen);
             if (nwritten <= 0) break;
             c->sentlen += nwritten;
@@ -1584,6 +1585,7 @@ int writeToClient(client *c, int handler_installed) {
 
             /* If the buffer was sent, set bufpos to zero to continue with
              * the remainder of the reply. */
+            //已经发送完成。
             if ((int)c->sentlen == c->bufpos) {
                 c->bufpos = 0;
                 c->sentlen = 0;
@@ -1591,7 +1593,7 @@ int writeToClient(client *c, int handler_installed) {
         } else {
             o = listNodeValue(listFirst(c->reply));
             objlen = o->used;
-
+            //对象长度=0 总回复的字节数-对象的size大小。并且去掉该对象
             if (objlen == 0) {
                 c->reply_bytes -= o->size;
                 listDelNode(c->reply,listFirst(c->reply));
@@ -1645,6 +1647,7 @@ int writeToClient(client *c, int handler_installed) {
          * as an interaction, since we always send REPLCONF ACK commands
          * that take some time to just fill the socket output buffer.
          * We just rely on data / pings received for timeout detection. */
+        1232
         if (!(c->flags & CLIENT_MASTER)) c->lastinteraction = server.unixtime;
     }
     if (!clientHasPendingReplies(c)) {
@@ -3488,6 +3491,7 @@ int checkClientPauseTimeoutAndReturnIfPaused(void) {
  * write, close sequence needed to serve a client.
  *
  * The function returns the total number of events processed. */
+// aof  rdb 时候都会调用一次，每次处理四轮事件，
 void processEventsWhileBlocked(void) {
     int iterations = 4; /* See the function top-comment. */
 
@@ -3813,7 +3817,7 @@ int handleClientsWithPendingReadsUsingThreads(void) {
         setIOPendingCount(j, count);
     }
 
-    /* Also use the main thread to process a slice of clients. 主线程 */
+    /* Also use the main thread to process a slice of clients. 目前是主线程 只处理第0个阻塞的列表。 */
     listRewind(io_threads_list[0],&li);
     while((ln = listNext(&li))) {
         client *c = listNodeValue(ln);

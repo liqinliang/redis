@@ -2695,13 +2695,16 @@ void clusterBroadcastPong(int target) {
         if (!node->link) continue;
         if (node == myself || nodeInHandshake(node)) continue;
         if (target == CLUSTER_BROADCAST_LOCAL_SLAVES) {
+            //node 是从， 有主 （主是我【从的从】，或node的主和我的主是一个【从兄弟】）
             int local_slave =
                 nodeIsSlave(node) && node->slaveof &&
                 (node->slaveof == myself || node->slaveof == myself->slaveof);
+            //不是以上条件的跳过。主要是找和我身份一样的从节点广播出去，一起选主。
             if (!local_slave) continue;
         }
         clusterSendPing(node->link,CLUSTERMSG_TYPE_PONG);
     }
+    //是否迭代引用
     dictReleaseIterator(di);
 }
 
@@ -3134,9 +3137,9 @@ void clusterFailoverReplaceYourMaster(void) {
  * a non-zero amount of hash slots is in FAIL state.
  *
  * The goal of this function is:
- * 1) To check if we are able to perform a failover, is our data updated?
- * 2) Try to get elected by masters.
- * 3) Perform the failover informing all the other nodes.
+ * 1) To check if we are able to perform a failover, is our data updated? 检查我们是否有能力执行failover（故障转移） 我们数据是否最新
+ * 2) Try to get elected by masters. 试图选主
+ * 3) Perform the failover informing all the other nodes.  给其他节点自动切换提供信息
  */
 void clusterHandleSlaveFailover(void) {
     mstime_t data_age;
@@ -3145,7 +3148,7 @@ void clusterHandleSlaveFailover(void) {
     int manual_failover = server.cluster->mf_end != 0 &&
                           server.cluster->mf_can_start;
     mstime_t auth_timeout, auth_retry_time;
-
+    //已经执行到该方法，就去掉进入该方法的标识
     server.cluster->todo_before_sleep &= ~CLUSTER_TODO_HANDLE_FAILOVER;
 
     /* Compute the failover timeout (the max time we have to send votes
@@ -3161,11 +3164,11 @@ void clusterHandleSlaveFailover(void) {
 
     /* Pre conditions to run the function, that must be met both in case
      * of an automatic or manual failover:
-     * 1) We are a slave.
-     * 2) Our master is flagged as FAIL, or this is a manual failover.
-     * 3) We don't have the no failover configuration set, and this is
+     * 1) We are a slave.  是从节点
+     * 2) Our master is flagged as FAIL, or this is a manual failover. 主节点已经fail 或者手动执行的
+     * 3) We don't have the no failover configuration set, and this is 没有配置不进行切换，并且这个不是手动
      *    not a manual failover.
-     * 4) It is serving slots. */
+     * 4) It is serving slots.  主节点必须有slots */
     if (nodeIsMaster(myself) ||
         myself->slaveof == NULL ||
         (!nodeFailed(myself->slaveof) && !manual_failover) ||

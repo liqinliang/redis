@@ -1643,16 +1643,18 @@ int allPersistenceDisabled(void) {
 /* Add a sample to the operations per second array of samples. */
 void trackInstantaneousMetric(int metric, long long current_reading) {
     long long now = mstime();
+    //上次抽样时间 到目前的间隔
     long long t = now - server.inst_metric[metric].last_sample_time;
     long long ops = current_reading -
                     server.inst_metric[metric].last_sample_count;
     long long ops_sec;
-
+    //每秒操作多少。
     ops_sec = t > 0 ? (ops*1000/t) : 0;
 
     server.inst_metric[metric].samples[server.inst_metric[metric].idx] =
         ops_sec;
     server.inst_metric[metric].idx++;
+    //样本个数。一共16个。 这16个来回覆盖，根据取模覆盖 样本记录是每秒操作多少单位
     server.inst_metric[metric].idx %= STATS_METRIC_SAMPLES;
     server.inst_metric[metric].last_sample_time = now;
     server.inst_metric[metric].last_sample_count = current_reading;
@@ -2071,11 +2073,12 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         }
     }
 
+    //该宏定义是看调度间隔是不是 小于等于系统执行间隔（表示到了，如果大于还没到）   或者正好在区间内 整数个取模是0
     run_with_period(100) {
         long long stat_net_input_bytes, stat_net_output_bytes;
         atomicGet(server.stat_net_input_bytes, stat_net_input_bytes);
         atomicGet(server.stat_net_output_bytes, stat_net_output_bytes);
-
+        //跟踪一些实例的指标。
         trackInstantaneousMetric(STATS_METRIC_COMMAND,server.stat_numcommands);
         trackInstantaneousMetric(STATS_METRIC_NET_INPUT,
                 stat_net_input_bytes);
@@ -2112,7 +2115,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         run_with_period(5000) {
             for (j = 0; j < server.dbnum; j++) {
                 long long size, used, vkeys;
-
+                //#define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
                 size = dictSlots(server.db[j].dict);
                 used = dictSize(server.db[j].dict);
                 vkeys = dictSize(server.db[j].expires);
@@ -2294,7 +2297,9 @@ void blockingOperationEnds() {
  * also during blocked scripts.
  * It attempts to do its duties at a similar rate as the configured server.hz,
  * and updates cronloops variable so that similarly to serverCron, the
- * run_with_period can be used. */
+ * run_with_period can be used.
+ * 充当serverCron 角色，在RDB AOF 或者脚本执行阻塞期间。
+ * */
 void whileBlockedCron() {
     /* Here we may want to perform some cron jobs (normally done server.hz times
      * per second). */
@@ -2404,7 +2409,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
     if (server.active_expire_enabled && server.masterhost == NULL)
         activeExpireCycle(ACTIVE_EXPIRE_CYCLE_FAST);
 
-    /* Unblock all the clients blocked for synchronous replication
+    /* Unblock all the clients blocked for synchronous replication  这个方法是 slave
      * in WAIT. */
     if (listLength(server.clients_waiting_acks))
         processClientsWaitingReplicas();
